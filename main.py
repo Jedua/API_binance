@@ -1,4 +1,3 @@
-# main.py
 from connect import get_binance_connection
 from functions import get_balance, get_historical_data
 

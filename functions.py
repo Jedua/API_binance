@@ -1,72 +1,93 @@
-import pandas as pd #en versiones despues de 2.0 append ya no existe usar concat() en su lugar
-import json
-from collections import defaultdict
+import pandas as pd
 import time
 import pandas_ta as ta
+import json
 
-
-# Almacenar datos de velas
-data = defaultdict(lambda: pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']))
-
-
-def get_balance(exchange):
-    balance = exchange.fetch_balance()
-    return balance
-
-def get_historical_data(exchange, symbol, timeframe='1h', limit=100):
-    # Obtener datos históricos
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-    # Convertir a DataFrame para mejor manejo
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    return df
-
-# 1m: 1 minuto.     15m: 15 minutos.    1w: 1 semana.
-# 3m: 3 minutos.    30m: 30 minutos.
-# 5m: 5 minutos.    1h: 1 hora.
-# 4h: 4 horas.      1d: 1 día.
-
-def get_multiple_symbols_data(exchange, symbols, timeframe='1h', limit=100):
-    data = {}
-    for symbol in symbols:
-        df = get_historical_data(exchange, symbol, timeframe, limit)
-        data[symbol] = df
-    return data
-
-
-# Un día tiene 288 velas de 5 minutos (porque hay 12 velas de 5 minutos por hora y 24 horas en un día).
-# 4 meses son aproximadamente 120 días.
-# Por lo tanto, 120 días × 288 velas por día = 34,560 velas para cubrir 4 meses.
-# Obtener datos históricos paginados (REST API) para 4 meses
-def get_historical_data_paginated(exchange, symbol, timeframe='15m', limit=1000):
+def get_historical_data(exchange, symbol, timeframe='15m', days=120, limit=1000):
+    """Obtener datos históricos paginados de los últimos 'days' días"""
     all_data = []
+    since = exchange.parse8601((pd.Timestamp.now() - pd.Timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+
     while True:
-        # Obtener los datos en fragmentos de 'limit' velas
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-        if len(ohlcv) == 0:
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit)
+        if not ohlcv:
             break
-        all_data.extend(ohlcv)  # Agregar los datos obtenidos
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        all_data.append(df)
         since = ohlcv[-1][0] + 1  # Continuar desde el último timestamp
-        time.sleep(1)  # Pausa entre solicitudes
 
-        # Verificación: Si ya obtenemos más de 34,560 velas (4 meses)
-        if len(all_data) >= 34560:
+        time.sleep(1)  # Pausar para no exceder las solicitudes
+
+        if len(pd.concat(all_data)) >= (288 * 120 / 15):
             break
 
-    # Verificar cuántos datos históricos obtuviste
-    print(f"Total de datos históricos obtenidos para {symbol}: {len(all_data)}")
+    return pd.concat(all_data).reset_index(drop=True)
 
-    # Convertir los datos a DataFrame
-    df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+def calcular_indicadores(df):
+    if len(df) >= 50:
+        df['SMA_50'] = ta.sma(df['close'], length=50)
+    else:
+        df['SMA_50'] = None
+
+    if len(df) >= 200:
+        df['SMA_200'] = ta.sma(df['close'], length=200)
+    else:
+        df['SMA_200'] = None
+
+    if len(df) >= 14:
+        df['RSI'] = ta.rsi(df['close'], length=14)
+    else:
+        df['RSI'] = None
+
+    if len(df) >= 26:
+        macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
+        df['MACD'] = macd['MACD_12_26_9']
+        df['MACD_signal'] = macd['MACDs_12_26_9']
+        df['MACD_histogram'] = macd['MACDh_12_26_9']
+    else:
+        df['MACD'] = df['MACD_signal'] = df['MACD_histogram'] = None
+
     return df
 
-def on_message(ws, message):
-    json_message = json.loads(message)
-    symbol = json_message['s']  # Ejemplo: 'ETHUSDT', 'BTCUSDT', etc.
-    candle = json_message['k']   # Datos de la vela
+def confirmar_volumen(df):
+    df['average_volume'] = df['volume'].rolling(window=20).mean()
+    df['volumen_confirmado'] = df['volume'] > 1.5 * df['average_volume']
+    return df
 
-    # Datos de la vela en formato legible
+def generar_senales(df):
+    if len(df) >= 200:
+        df['buy_signal'] = (
+            (df['SMA_50'] > df['SMA_200']) &
+            (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1)) &
+            (df['RSI'] < 30) &
+            (df['MACD'] > df['MACD_signal'])
+        )
+        df['sell_signal'] = (
+            (df['SMA_50'] < df['SMA_200']) &
+            (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1)) &
+            (df['RSI'] > 70) &
+            (df['MACD'] < df['MACD_signal'])
+        )
+        df = confirmar_volumen(df)
+        df['buy_signal'] = df['buy_signal'] & df['volumen_confirmado']
+        df['sell_signal'] = df['sell_signal'] & df['volumen_confirmado']
+    else:
+        df['buy_signal'] = df['sell_signal'] = False
+
+    if df['buy_signal'].iloc[-1]:
+        print(f"🚀 Señal de COMPRA detectada: {df['timestamp'].iloc[-1]}")
+    elif df['sell_signal'].iloc[-1]:
+        print(f"🔻 Señal de VENTA detectada: {df['timestamp'].iloc[-1]}")
+
+    return df
+
+def on_message(ws, message, data):
+    import json
+    json_message = json.loads(message)
+    symbol = json_message['s'].replace("USDT", "/USDT")
+    candle = json_message['k']
+
     timestamp = pd.to_datetime(candle['t'], unit='ms')
     open_price = float(candle['o'])
     high_price = float(candle['h'])
@@ -74,7 +95,6 @@ def on_message(ws, message):
     close_price = float(candle['c'])
     volume = float(candle['v'])
 
-    # Crear un nuevo DataFrame con la nueva vela
     new_row = pd.DataFrame({
         'timestamp': [timestamp],
         'open': [open_price],
@@ -84,102 +104,36 @@ def on_message(ws, message):
         'volume': [volume]
     })
 
-    # Recuperar el DataFrame existente para el símbolo correspondiente
-    df = data[symbol]
+    # Concatenar los datos en tiempo real
+    data[symbol] = pd.concat([data[symbol], new_row], ignore_index=True)
 
-    # Concatenar los nuevos datos en tiempo real al DataFrame existente
-    df = pd.concat([df, new_row], ignore_index=True)
+    # Mostrar el número de registros actuales
+    print(f"\nCantidad de datos actuales para {symbol}: {len(data[symbol])}")
 
-    # Mantener suficientes datos para cálculos (200 para SMA_200)
-    if len(df) > 200 + 4:  # Ajusta este número según lo que necesites
-        df = df.tail(200 + 4)
+    # Calcular indicadores técnicos (SMA, RSI, MACD)
+    data[symbol] = calcular_indicadores(data[symbol])
 
-    # Calcular indicadores
-    df = calcular_indicadores(df)
+    # Generar señales de compra/venta
+    data[symbol] = generar_senales(data[symbol])
 
-    # Solo generar señales si tenemos suficientes datos para SMA_200
-    if len(df) >= 200 and df['SMA_200'].notnull().all():
-        df = generar_senales(df, symbol)
-    else:
-        print(f"Aún no hay suficientes datos para generar señales para {symbol}.")
-
-    # Actualizar el diccionario con los datos actualizados
-    data[symbol] = df
-
-    # Mostrar los últimos datos del símbolo
-    print(f"Últimos datos de {symbol} (actualizado):")
+    # Mostrar los últimos 5 registros para verificar la actualización
+    print("Datos actualizados con análisis:")
     print(data[symbol].tail())
-    print("\n")
 
-# Manejar errores del WebSocket
-def on_error(ws, error):
-    print(error)
-
-# Manejar el cierre de la conexión del WebSocket
-def on_close(ws):
-    print("Conexión cerrada")
-
-# Iniciar el WebSocket y suscribirse a los pares deseados
 def on_open(ws):
     params = {
         "method": "SUBSCRIBE",
         "params": [
-            "ethusdt@kline_5m",
-            "adausdt@kline_5m",
-            "btcusdt@kline_5m"
+            "btcusdt@kline_15m",
+            "ethusdt@kline_15m",
+            "adausdt@kline_15m"
         ],
         "id": 1
     }
     ws.send(json.dumps(params))
 
-# Iniciar el WebSocket
-def iniciar_websocket():
+def iniciar_websocket(data):
     import websocket
     socket = "wss://stream.binance.com:9443/ws"
-    ws = websocket.WebSocketApp(socket, on_message=on_message, on_error=on_error, on_close=on_close)
-    ws.on_open = on_open
+    ws = websocket.WebSocketApp(socket, on_message=lambda ws, msg: on_message(ws, msg, data), on_open=on_open)
     ws.run_forever()
-
-def calcular_indicadores(df):
-    # Imprimir cuántas filas tiene el DataFrame para verificar los datos
-    print(f"Cantidad de datos disponibles: {len(df)}")
-
-    # Inicializar columnas si no existen
-    if 'SMA_50' not in df.columns:
-        df['SMA_50'] = None
-    if 'SMA_200' not in df.columns:
-        df['SMA_200'] = None
-    if 'RSI' not in df.columns:
-        df['RSI'] = None
-
-    # Solo calcular si tenemos suficientes datos
-    if len(df) >= 50:
-        df['SMA_50'] = ta.sma(df['close'], length=50)
-    if len(df) >= 200:
-        df['SMA_200'] = ta.sma(df['close'], length=200)
-    if len(df) >= 14:
-        df['RSI'] = ta.rsi(df['close'], length=14)
-
-    return df
-
-# Generar señales de compra/venta basado en cruces de medias móviles
-def generar_senales(df, symbol):
-    # Generar señal de compra cuando la SMA_50 cruza por encima de la SMA_200
-    df['buy_signal'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
-    
-    # Generar señal de venta cuando la SMA_50 cruza por debajo de la SMA_200
-    df['sell_signal'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
-
-    # Mostrar las señales de compra o venta en la consola si existen
-    if df['buy_signal'].iloc[-1]:
-        print(f"🚀 Señal de COMPRA (Long) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
-    
-    elif df['sell_signal'].iloc[-1]:
-        print(f"🔻 Señal de VENTA (Short) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
-    
-    else:
-        print(f"No se ha detectado ninguna señal de compra o venta para {symbol}.")
-
-    # Retornar el DataFrame con las nuevas columnas de señales
-    return df
-

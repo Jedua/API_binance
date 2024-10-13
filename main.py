@@ -14,7 +14,7 @@ def main():
         print(f"Datos históricos de {symbol} (últimos 5 registros):")
         print(data[symbol].tail())
 
-    # Iniciar el WebSocket para recibir datos en tiempo real
+    # Iniciar el WebSocket con los datos históricos ya presentes
     iniciar_websocket()
 
 if __name__ == '__main__':

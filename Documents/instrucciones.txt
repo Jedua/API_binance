@@ -109,3 +109,15 @@ remote:
 To https://github.com/Jedua/API_binance.git
  * [new branch]      feature/periodosTiempo -> feature/periodosTiempo
 (venv) 
+
+# si no se borran las ramas despues d finalizar puede ser por un bloqueo
+
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (develop)
+$ cd C:/Users/pepel/Documents/proyectosPersonales/API_binance/.git/
+(venv) 
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance/.git (GIT_DIR!)
+$ rm packed-refs.lock
+(venv) 
+
+# despues hay que borrarlas manalmente
+git branch -d feature/periodosTiempo

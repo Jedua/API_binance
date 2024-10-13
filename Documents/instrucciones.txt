@@ -58,3 +58,54 @@
 # git flow release finish releaseFirstConection
 
 # una vez pedira un descripcion y el editor por defectoes VIM
+
+
+#si se crea una rama desde main
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (main)
+$ git flow feature start periodosTiempo
+Branches 'develop' and 'origin/develop' have diverged.
+And local branch 'develop' is ahead of 'origin/develop'. 
+Switched to a new branch 'feature/periodosTiempo'
+
+Summary of actions:
+- A new branch 'feature/periodosTiempo' was created, based on 'develop'
+- You are now on branch 'feature/periodosTiempo'
+
+Now, start committing on your feature. When done, use:   
+
+     git flow feature finish periodosTiempo
+
+(venv) 
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (feature/periodosTiempo)
+            $ git checkout develop
+            git pull origin develop
+Switched to branch 'develop'
+From https://github.com/Jedua/API_binance
+ * branch            develop    -> FETCH_HEAD
+Already up to date.
+(venv) 
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (develop)
+            $ git checkout feature/periodosTiempo
+Switched to branch 'feature/periodosTiempo'
+(venv) 
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (feature/periodosTiempo)
+            $ git rebase develop
+Current branch feature/periodosTiempo is up to date.
+(venv) 
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (feature/periodosTiempo)
+            $ git rebase --continue
+fatal: no rebase in progress
+(venv) 
+pepel@Jedua-PC MINGW64 ~/Documents/proyectosPersonales/API_binance (feature/periodosTiempo)
+            $ git push --force-with-lease origin feature/periodosTiempo
+Enumerating objects: 1, done.
+Counting objects: 100% (1/1), done.
+Writing objects: 100% (1/1), 261 bytes | 261.00 KiB/s, done.
+Total 1 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: 
+remote: Create a pull request for 'feature/periodosTiempo' on GitHub by visiting:
+remote:      https://github.com/Jedua/API_binance/pull/new/feature/periodosTiempo
+remote:
+To https://github.com/Jedua/API_binance.git
+ * [new branch]      feature/periodosTiempo -> feature/periodosTiempo
+(venv) 

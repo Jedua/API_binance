@@ -38,7 +38,7 @@ def get_multiple_symbols_data(exchange, symbols, timeframe='1h', limit=100):
 # 4 meses son aproximadamente 120 días.
 # Por lo tanto, 120 días × 288 velas por día = 34,560 velas para cubrir 4 meses.
 # Obtener datos históricos paginados (REST API) para 4 meses
-def get_historical_data_paginated(exchange, symbol, timeframe='5m', limit=1000):
+def get_historical_data_paginated(exchange, symbol, timeframe='15m', limit=1000):
     all_data = []
     while True:
         # Obtener los datos en fragmentos de 'limit' velas
@@ -107,7 +107,7 @@ def on_message(ws, message):
     print(f"Últimos datos de {symbol} (actualizado):")
     print(data[symbol].tail())
     print("\n")
-    
+
 # Manejar errores del WebSocket
 def on_error(ws, error):
     print(error)

@@ -1,21 +1,23 @@
 from connect import get_binance_connection
-from functions import get_historical_data_paginated, iniciar_websocket, data
+from functions import get_historical_data, iniciar_websocket
 
-def main():
-    # Conectar a Binance
-    exchange = get_binance_connection()
+# Conectar a Binance
+exchange = get_binance_connection()
 
-    # Obtener datos históricos de los últimos 4 meses de ETH, ADA y BTC
-    symbols = ['ETH/USDT', 'ADA/USDT', 'BTC/USDT']
+# Diccionario para almacenar datos históricos y en tiempo real
+data = {
+    'BTC/USDT': None,
+    'ETH/USDT': None,
+    'ADA/USDT': None
+}
+
+if __name__ == "__main__":
+    # Obtener datos históricos de los últimos 4 meses
+    symbols = ['BTC/USDT', 'ETH/USDT', 'ADA/USDT']
     for symbol in symbols:
-        print(f"Obteniendo datos históricos de {symbol} (últimos 4 meses)...")
-        historical_data = get_historical_data_paginated(exchange, symbol, timeframe='5m')
-        data[symbol] = historical_data
-        print(f"Datos históricos de {symbol} (últimos 5 registros):")
-        print(data[symbol].tail())
+        print(f"Obteniendo datos históricos de {symbol}...")
+        data[symbol] = get_historical_data(exchange, symbol)
 
-    # Iniciar el WebSocket con los datos históricos ya presentes
-    iniciar_websocket()
-
-if __name__ == '__main__':
-    main()
+    # Iniciar WebSocket para obtener datos en tiempo real
+    print("\nIniciando WebSocket para obtener datos en tiempo real...")
+    iniciar_websocket(data)

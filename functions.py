@@ -62,12 +62,12 @@ def get_historical_data_paginated(exchange, symbol, timeframe='5m', limit=1000):
     return df
 
 #union con el historico
+# Procesar datos en tiempo real y actualizar el DataFrame
 def on_message(ws, message):
     json_message = json.loads(message)
-    symbol = json_message['s']  # Ejemplo: 'ETHUSDT', 'BTCUSDT', etc.
-    candle = json_message['k']   # Datos de la vela
+    symbol = json_message['s']
+    candle = json_message['k']
 
-    # Datos de la vela en formato legible
     timestamp = pd.to_datetime(candle['t'], unit='ms')
     open_price = float(candle['o'])
     high_price = float(candle['h'])
@@ -75,7 +75,7 @@ def on_message(ws, message):
     close_price = float(candle['c'])
     volume = float(candle['v'])
 
-    # Crear un nuevo DataFrame con la nueva vela
+    # Crear un nuevo DataFrame con los nuevos datos
     new_row = pd.DataFrame({
         'timestamp': [timestamp],
         'open': [open_price],
@@ -85,27 +85,29 @@ def on_message(ws, message):
         'volume': [volume]
     })
 
-    # Recuperar el DataFrame existente para el símbolo correspondiente
     df = data[symbol]
 
-    # Concatenar los nuevos datos en tiempo real al DataFrame existente
+    # Concatenar el nuevo dato con el histórico
     df = pd.concat([df, new_row], ignore_index=True)
 
-    # Mantener suficientes datos para cálculos
-    if len(df) > 34560 + 4:  # Máximo 4 meses de datos + tiempo real
-        df = df.tail(34560 + 4)  # Mantener solo los últimos datos
+    # Mantener solo 4 meses + datos en tiempo real
+    if len(df) > 34560 + 4:
+        df = df.tail(34560 + 4)
 
     # Calcular indicadores
     df = calcular_indicadores(df)
 
-    # Actualizar el diccionario con los datos actualizados
+    # Generar señales de compra y venta
+    df = generar_senales(df, symbol)
+
+    # Actualizar el diccionario con los nuevos datos
     data[symbol] = df
 
     # Mostrar los últimos datos del símbolo
     print(f"Últimos datos de {symbol} (actualizado):")
     print(data[symbol].tail())
     print("\n")
-
+    
 # Manejar errores del WebSocket
 def on_error(ws, error):
     print(error)

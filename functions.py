@@ -2,6 +2,7 @@ import pandas as pd #en versiones despues de 2.0 append ya no existe usar concat
 import json
 from collections import defaultdict
 import time
+import pandas_ta as ta
 
 
 # Almacenar datos de velas
@@ -37,27 +38,30 @@ def get_multiple_symbols_data(exchange, symbols, timeframe='1h', limit=100):
 # 4 meses son aproximadamente 120 días.
 # Por lo tanto, 120 días × 288 velas por día = 34,560 velas para cubrir 4 meses.
 # Obtener datos históricos paginados (REST API) para 4 meses
-def get_historical_data_paginated(exchange, symbol, timeframe='5m', since=None, limit=1000):
+def get_historical_data_paginated(exchange, symbol, timeframe='5m', limit=1000):
     all_data = []
     while True:
         # Obtener los datos en fragmentos de 'limit' velas
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit)
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         if len(ohlcv) == 0:
             break
         all_data.extend(ohlcv)  # Agregar los datos obtenidos
         since = ohlcv[-1][0] + 1  # Continuar desde el último timestamp
-        time.sleep(1)  # Para evitar ser bloqueados por la API
+        time.sleep(1)  # Pausa entre solicitudes
 
-        # Verificación: Si ya obtenemos 34,560 velas (4 meses), podemos detenernos
+        # Verificación: Si ya obtenemos más de 34,560 velas (4 meses)
         if len(all_data) >= 34560:
             break
+
+    # Verificar cuántos datos históricos obtuviste
+    print(f"Total de datos históricos obtenidos para {symbol}: {len(all_data)}")
 
     # Convertir los datos a DataFrame
     df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     return df
 
-# Procesar los mensajes recibidos del WebSocket
+#union con el historico
 def on_message(ws, message):
     json_message = json.loads(message)
     symbol = json_message['s']  # Ejemplo: 'ETHUSDT', 'BTCUSDT', etc.
@@ -81,14 +85,20 @@ def on_message(ws, message):
         'volume': [volume]
     })
 
-    # Concatenar la nueva vela al DataFrame existente
+    # Recuperar el DataFrame existente para el símbolo correspondiente
     df = data[symbol]
+
+    # Concatenar los nuevos datos en tiempo real al DataFrame existente
     df = pd.concat([df, new_row], ignore_index=True)
 
-    # Mantener un número razonable de filas (por ejemplo, últimas 4 meses de datos + tiempo real)
-    if len(df) > 34560 + 4:  # Máximo 4 meses + tiempo real
-        df = df.tail(34560 + 4)  # Mantener las últimas filas de datos
+    # Mantener suficientes datos para cálculos
+    if len(df) > 34560 + 4:  # Máximo 4 meses de datos + tiempo real
+        df = df.tail(34560 + 4)  # Mantener solo los últimos datos
 
+    # Calcular indicadores
+    df = calcular_indicadores(df)
+
+    # Actualizar el diccionario con los datos actualizados
     data[symbol] = df
 
     # Mostrar los últimos datos del símbolo
@@ -124,3 +134,40 @@ def iniciar_websocket():
     ws = websocket.WebSocketApp(socket, on_message=on_message, on_error=on_error, on_close=on_close)
     ws.on_open = on_open
     ws.run_forever()
+
+def calcular_indicadores(df):
+    # Imprimir cuántas filas tiene el DataFrame para verificar los datos
+    print(f"Cantidad de datos disponibles: {len(df)}")
+
+    # Solo calcular si tenemos suficientes datos
+    if len(df) >= 50:
+        df['SMA_50'] = ta.sma(df['close'], length=50)
+    else:
+        df['SMA_50'] = None
+
+    if len(df) >= 200:
+        df['SMA_200'] = ta.sma(df['close'], length=200)
+    else:
+        df['SMA_200'] = None
+
+    if len(df) >= 14:
+        df['RSI'] = ta.rsi(df['close'], length=14)
+    else:
+        df['RSI'] = None
+    
+    return df
+
+
+
+# Generar señales de compra/venta basado en cruces de medias móviles
+def generar_senales(df, symbol):
+    df['buy_signal'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
+    df['sell_signal'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
+
+    # Mostrar las señales en la consola
+    if df['buy_signal'].iloc[-1]:
+        print(f"🚀 Señal de COMPRA (Long) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+    elif df['sell_signal'].iloc[-1]:
+        print(f"🔻 Señal de VENTA (Short) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+
+    return df

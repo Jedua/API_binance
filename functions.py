@@ -11,3 +11,11 @@ def get_historical_data(exchange, symbol, timeframe='1h', limit=100):
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     return df
+
+
+def get_multiple_symbols_data(exchange, symbols, timeframe='1h', limit=100):
+    data = {}
+    for symbol in symbols:
+        df = get_historical_data(exchange, symbol, timeframe, limit)
+        data[symbol] = df
+    return data

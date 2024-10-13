@@ -1,5 +1,5 @@
 from connect import get_binance_connection
-from functions import get_balance, get_historical_data
+from functions import get_balance, get_multiple_symbols_data
 
 def main():
     # Conectar a Binance
@@ -10,10 +10,12 @@ def main():
     print(balance)
 
     # Obtener datos históricos de un par (por ejemplo ETH/USDT)
-    symbol = 'ETH/USDT'
-    historical_data = get_historical_data(exchange, symbol)
-    print(f"Datos históricos de {symbol}:")
-    print(historical_data.tail())
+    symbols = ['ETH/USDT', 'ADA/USDT', 'BTC/USDT']
+    historical_data = get_multiple_symbols_data(exchange, symbols)
+    
+    for symbol, data in historical_data.items():
+        print(f"\nDatos históricos de {symbol}:")
+        print(data.tail())
 
 if __name__ == '__main__':
     main()

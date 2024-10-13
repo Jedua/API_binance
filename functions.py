@@ -164,17 +164,22 @@ def calcular_indicadores(df):
 
 # Generar señales de compra/venta basado en cruces de medias móviles
 def generar_senales(df, symbol):
-    # Asegurarnos de que SMA_50 y SMA_200 no son NaN o None
-    if df['SMA_50'].notna().all() and df['SMA_200'].notna().all():
-        df['buy_signal'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
-        df['sell_signal'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
+    # Generar señal de compra cuando la SMA_50 cruza por encima de la SMA_200
+    df['buy_signal'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
+    
+    # Generar señal de venta cuando la SMA_50 cruza por debajo de la SMA_200
+    df['sell_signal'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
 
-        # Mostrar las señales en la consola
-        if df['buy_signal'].iloc[-1]:
-            print(f"🚀 Señal de COMPRA (Long) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
-        elif df['sell_signal'].iloc[-1]:
-            print(f"🔻 Señal de VENTA (Short) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+    # Mostrar las señales de compra o venta en la consola si existen
+    if df['buy_signal'].iloc[-1]:
+        print(f"🚀 Señal de COMPRA (Long) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+    
+    elif df['sell_signal'].iloc[-1]:
+        print(f"🔻 Señal de VENTA (Short) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+    
     else:
-        print(f"Aún no hay suficientes datos para generar señales para {symbol}.")
+        print(f"No se ha detectado ninguna señal de compra o venta para {symbol}.")
 
+    # Retornar el DataFrame con las nuevas columnas de señales
     return df
+

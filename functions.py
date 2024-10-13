@@ -61,13 +61,12 @@ def get_historical_data_paginated(exchange, symbol, timeframe='15m', limit=1000)
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     return df
 
-#union con el historico
-# Procesar datos en tiempo real y actualizar el DataFrame
 def on_message(ws, message):
     json_message = json.loads(message)
-    symbol = json_message['s']
-    candle = json_message['k']
+    symbol = json_message['s']  # Ejemplo: 'ETHUSDT', 'BTCUSDT', etc.
+    candle = json_message['k']   # Datos de la vela
 
+    # Datos de la vela en formato legible
     timestamp = pd.to_datetime(candle['t'], unit='ms')
     open_price = float(candle['o'])
     high_price = float(candle['h'])
@@ -75,7 +74,7 @@ def on_message(ws, message):
     close_price = float(candle['c'])
     volume = float(candle['v'])
 
-    # Crear un nuevo DataFrame con los nuevos datos
+    # Crear un nuevo DataFrame con la nueva vela
     new_row = pd.DataFrame({
         'timestamp': [timestamp],
         'open': [open_price],
@@ -85,22 +84,26 @@ def on_message(ws, message):
         'volume': [volume]
     })
 
+    # Recuperar el DataFrame existente para el símbolo correspondiente
     df = data[symbol]
 
-    # Concatenar el nuevo dato con el histórico
+    # Concatenar los nuevos datos en tiempo real al DataFrame existente
     df = pd.concat([df, new_row], ignore_index=True)
 
-    # Mantener solo 4 meses + datos en tiempo real
-    if len(df) > 34560 + 4:
-        df = df.tail(34560 + 4)
+    # Mantener suficientes datos para cálculos (200 para SMA_200)
+    if len(df) > 200 + 4:  # Ajusta este número según lo que necesites
+        df = df.tail(200 + 4)
 
     # Calcular indicadores
     df = calcular_indicadores(df)
 
-    # Generar señales de compra y venta
-    df = generar_senales(df, symbol)
+    # Solo generar señales si tenemos suficientes datos para SMA_200
+    if len(df) >= 200 and df['SMA_200'].notnull().all():
+        df = generar_senales(df, symbol)
+    else:
+        print(f"Aún no hay suficientes datos para generar señales para {symbol}.")
 
-    # Actualizar el diccionario con los nuevos datos
+    # Actualizar el diccionario con los datos actualizados
     data[symbol] = df
 
     # Mostrar los últimos datos del símbolo
@@ -141,35 +144,37 @@ def calcular_indicadores(df):
     # Imprimir cuántas filas tiene el DataFrame para verificar los datos
     print(f"Cantidad de datos disponibles: {len(df)}")
 
+    # Inicializar columnas si no existen
+    if 'SMA_50' not in df.columns:
+        df['SMA_50'] = None
+    if 'SMA_200' not in df.columns:
+        df['SMA_200'] = None
+    if 'RSI' not in df.columns:
+        df['RSI'] = None
+
     # Solo calcular si tenemos suficientes datos
     if len(df) >= 50:
         df['SMA_50'] = ta.sma(df['close'], length=50)
-    else:
-        df['SMA_50'] = None
-
     if len(df) >= 200:
         df['SMA_200'] = ta.sma(df['close'], length=200)
-    else:
-        df['SMA_200'] = None
-
     if len(df) >= 14:
         df['RSI'] = ta.rsi(df['close'], length=14)
-    else:
-        df['RSI'] = None
-    
+
     return df
-
-
 
 # Generar señales de compra/venta basado en cruces de medias móviles
 def generar_senales(df, symbol):
-    df['buy_signal'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
-    df['sell_signal'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
+    # Asegurarnos de que SMA_50 y SMA_200 no son NaN o None
+    if df['SMA_50'].notna().all() and df['SMA_200'].notna().all():
+        df['buy_signal'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
+        df['sell_signal'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
 
-    # Mostrar las señales en la consola
-    if df['buy_signal'].iloc[-1]:
-        print(f"🚀 Señal de COMPRA (Long) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
-    elif df['sell_signal'].iloc[-1]:
-        print(f"🔻 Señal de VENTA (Short) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+        # Mostrar las señales en la consola
+        if df['buy_signal'].iloc[-1]:
+            print(f"🚀 Señal de COMPRA (Long) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+        elif df['sell_signal'].iloc[-1]:
+            print(f"🔻 Señal de VENTA (Short) detectada para {symbol}: {df['timestamp'].iloc[-1]}")
+    else:
+        print(f"Aún no hay suficientes datos para generar señales para {symbol}.")
 
     return df

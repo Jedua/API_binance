@@ -1,0 +1,60 @@
+#pip freeze > requirements.txt
+#pip install -r requirements.txt
+#pip install requests
+
+# $ git flow init
+
+# Which branch should be used for bringing forth production releases?
+#    - main
+# Branch name for production releases: [main] 
+# Branch name for "next release" development: [develop] 
+
+# How to name your supporting branch prefixes?
+# Feature branches? [feature/] 
+# Bugfix branches? [bugfix/] 
+# Release branches? [release/] 
+# Hotfix branches? [hotfix/] 
+# Support branches? [support/] 
+# Version tag prefix? [] 
+# Hooks and filters directory? [C:/Users/pepel/Documents/proyectosPersonales/API_binance/.git/hooks]
+
+# git checkout -b develop
+# git push origin develop
+
+
+# Crear una nueva feature (funcionalidad) desde develop:
+# git flow feature start featureFirstConection
+
+# Crear una nueva release cuando estés listo para lanzar una versión:
+# git flow release start releaseFirstConection
+
+# Crear una hotfix cuando necesites corregir un error en producción:
+# git flow hotfix start hotfixFirstConection
+
+
+#trabajar en la nueva funcionalida
+# git flow feature start featureFirstConection
+
+# al terminar la nueva funcionalidad
+
+# git flow feature finish featureFirstConection
+
+# mensaje que sale al finalizar
+
+# git flow feature finish featureFirstConection
+# Switched to branch 'develop'
+# Updating 83dfec1..ddf9e15
+# Fast-forward
+#  main.py | 3 ++-
+#  1 file changed, 2 insertions(+), 1 deletion(-)
+
+# Actualizar rama develop
+# git push origin develop
+
+# Crear una rama de release: Para lanzar una nueva versión,
+# git flow release start releaseFirstConection
+
+# una vez revisado los cambios se finaliza lo que realiza fusiona la rama release con main
+# git flow release finish releaseFirstConection
+
+# una vez pedira un descripcion y el editor por defectoes VIM

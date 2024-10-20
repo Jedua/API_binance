@@ -3,25 +3,44 @@ import time
 import pandas_ta as ta
 import json
 
-def get_historical_data(exchange, symbol, timeframe='15m', days=120, limit=1000):
-    """Obtener datos históricos paginados de los últimos 'days' días"""
+def get_historical_data(exchange, symbol, timeframe='1h', days=120, limit=1000):
+    """Obtener datos históricos paginados de los últimos 'days' días con velas de 1 hora"""
     all_data = []
     since = exchange.parse8601((pd.Timestamp.now() - pd.Timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+    total_candles = 0
 
     while True:
+        # Obtener datos paginados con el límite de 1000 por cada solicitud
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit)
         if not ohlcv:
+            print("No se obtuvieron más datos.")
             break
+        
+        # Convertir los datos en un DataFrame y añadir a la lista de all_data
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         all_data.append(df)
-        since = ohlcv[-1][0] + 1  # Continuar desde el último timestamp
 
-        time.sleep(1)  # Pausar para no exceder las solicitudes
+        # Actualizar el contador de velas totales obtenidas
+        total_candles += len(ohlcv)
 
-        if len(pd.concat(all_data)) >= (288 * 120 / 15):
+        # Actualizar el punto desde donde empezar la siguiente solicitud
+        since = ohlcv[-1][0] + 1
+
+        # Pausar un poco para no hacer demasiadas solicitudes seguidas
+        time.sleep(1)
+
+        # Si hemos obtenido más de los registros esperados para el rango de días solicitado, salir
+        if total_candles >= (24 * days):  # 24 velas por día para velas de 1 hora
+            print(f"Se alcanzó el límite de {total_candles} registros, equivalente a {days} días de datos.")
             break
 
+        # Si el número de registros se detiene alrededor de 3000, es probable que Binance esté limitando
+        if total_candles >= 3000:
+            print("Se alcanzó el límite de 3000 registros debido a la limitación de la API de Binance.")
+            break
+
+    # Concatenar todos los DataFrames obtenidos
     return pd.concat(all_data).reset_index(drop=True)
 
 def calcular_indicadores(df):
